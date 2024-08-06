@@ -5,7 +5,6 @@
 #include <WiFiClient.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiUdp.h>
-#include <FS.h> // Include file system library
 
 // Pin definitions
 const int latchPin = D6;
@@ -23,8 +22,8 @@ const char* ssid = "Kinneret College";
 const char* pswd = "55555333";
 
 // Device and channel information
-const String deviceNumber = "12345";  // Replace with your device number
-const String channelNumber = "1";    // Replace with your channel number
+const String deviceNumber = "1121";  // Replace with your device number
+const String channelNumber = "2";    // Replace with your channel number
 
 nx7seg display(latchPin, clockPin, dataPin);  // Use the correct name
 ESP8266WebServer server(80);
@@ -64,12 +63,6 @@ void setup() {
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
-
-  // Initialize file system
-  if (!SPIFFS.begin()) {
-    Serial.println("Failed to mount file system");
-    return;
-  }
 
   server.on("/", handleRoot);
   server.on("/performance", handlePerformancePage);
@@ -115,22 +108,26 @@ void setLEDColor(int r, int g, int b) {
   analogWrite(ledPinB, b);
 }
 
+void updateServer(unsigned long time) {
+  String url = String("http://api.kits4.me/GEN/api.php?ACT=SET&DEV=") + deviceNumber + "&CH=" + channelNumber + "&VAL=" + time;
+  
+  WiFiClient client;
+  HTTPClient http;
+  http.begin(client, url);
+  int httpCode = http.GET();
+  
+  if (httpCode > 0) {
+    Serial.println("Server updated successfully");
+  } else {
+    Serial.println("Failed to update server: " + String(http.errorToString(httpCode).c_str()));
+  }
+  
+  http.end();
+}
+
 void updateRecords(unsigned long time) {
   pressRecords[pressIndex] = { time, time < bestTime };
   pressIndex = (pressIndex + 1) % 10;
-
-  // Save to file
-  File file = SPIFFS.open("/press_records.txt", "w");
-  if (file) {
-    for (int i = 0; i < 10; i++) {
-      file.print(pressRecords[i].duration);
-      file.print(",");
-      file.println(pressRecords[i].isBest ? "Yes" : "No");
-    }
-    file.close();
-  } else {
-    Serial.println("Failed to open file for writing");
-  }
 }
 
 void handlePerformanceMode() {
@@ -154,3 +151,4 @@ void handleRoot() {
   String message = "Welcome to the Arduino Competition!";
   server.send(200, "text/plain", message);
 }
+
